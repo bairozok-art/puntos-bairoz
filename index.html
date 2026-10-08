@@ -170,4 +170,164 @@
       color: var(--accent-gold);
     }
 
-    .redeem-
+    .redeem-form {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .loader {
+      display: none;
+      text-align: center;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <!-- Buscador -->
+    <div class="search-box">
+      <input type="text" id="clientIdInput" placeholder="Ingresá tu ID de Cliente">
+      <button onclick="buscarCliente()">Buscar</button>
+    </div>
+
+    <!-- Indicador de Carga -->
+    <div id="loader" class="loader">Consultando base de datos...</div>
+
+    <!-- Tarjeta Virtual -->
+    <div class="vip-card" id="cardContainer" style="opacity: 0.5;">
+      <div class="card-header">
+        <span class="brand-title">BAIROZ</span>
+        <span class="badge-tier" id="cardType">VIP</span>
+      </div>
+
+      <div class="card-number" id="cardNumber">•••• •••• •••• ••••</div>
+
+      <div class="card-footer">
+        <div>
+          <div class="field-label">Titular</div>
+          <div class="field-value" id="cardHolder">Nombre del Cliente</div>
+        </div>
+        <div>
+          <div class="field-label">CVV</div>
+          <div class="cvv-container">
+            <span class="field-value" id="cardCVV">•••</span>
+            <button class="toggle-cvv" onclick="toggleCVV()">👁️</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel de Puntos -->
+    <div class="stats-panel">
+      <div class="points-display">
+        <div class="field-label">Puntos Disponibles</div>
+        <div class="points-amount" id="puntosDisponibles">0</div>
+      </div>
+
+      <div class="redeem-form">
+        <input type="number" id="puntosCanje" placeholder="Puntos a canjear">
+        <input type="text" id="detalleCanje" placeholder="Detalle del premio (ej: Sticker Pack)">
+        <input type="password" id="cvvConfirm" placeholder="Confirmar CVV" maxlength="4">
+        <button onclick="procesarCanje()" style="background: var(--accent-gold); color: #000;">Canjear Puntos</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_URL = "https://script.google.com/macros/s/AKfycbxAtM2wj2VxOFmOYUOkTFBL377lPiCnBZwT6J8Jf22pT_Dk5FUiYetVobhwlWx0lmvB/exec";
+
+    let clienteActual = null;
+    let cvvVisible = false;
+
+    // Detecta ID si viene de un link QR (?id=CL-001)
+    window.addEventListener("DOMContentLoaded", () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const idFromUrl = urlParams.get("id");
+      if (idFromUrl) {
+        document.getElementById("clientIdInput").value = idFromUrl;
+        buscarCliente();
+      }
+    });
+
+    async function buscarCliente() {
+      const id = document.getElementById("clientIdInput").value.trim();
+      if (!id) return alert("Ingresá un ID válido");
+
+      mostrarCarga(true);
+      try {
+        const res = await fetch(`${API_URL}?action=getProfile&id=${encodeURIComponent(id)}`);
+        const result = await res.json();
+
+        if (result.status === "success") {
+          clienteActual = result.data;
+          actualizarInterfaz();
+        } else {
+          alert("Cliente no encontrado");
+        }
+      } catch (err) {
+        alert("Error de conexión con la base de datos");
+      } finally {
+        mostrarCarga(false);
+      }
+    }
+
+    function actualizarInterfaz() {
+      document.getElementById("cardContainer").style.opacity = "1";
+      document.getElementById("cardHolder").innerText = `${clienteActual.nombre} ${clienteActual.apellido}`;
+      document.getElementById("cardNumber").innerText = clienteActual.numeroTarjeta || "4512 •••• •••• 8890";
+      document.getElementById("cardType").innerText = clienteActual.tipoTarjeta || "VIP";
+      document.getElementById("puntosDisponibles").innerText = clienteActual.puntosDisponibles;
+      cvvVisible = false;
+      document.getElementById("cardCVV").innerText = "•••";
+    }
+
+    function toggleCVV() {
+      if (!clienteActual) return;
+      cvvVisible = !cvvVisible;
+      document.getElementById("cardCVV").innerText = cvvVisible ? clienteActual.cvv : "•••";
+    }
+
+    async function procesarCanje() {
+      if (!clienteActual) return alert("Primero buscá un cliente");
+
+      const puntos = document.getElementById("puntosCanje").value;
+      const detalle = document.getElementById("detalleCanje").value;
+      const cvv = document.getElementById("cvvConfirm").value;
+
+      if (!puntos || !detalle || !cvv) return alert("Completá todos los campos para el canje");
+
+      mostrarCarga(true);
+      try {
+        const res = await fetch(API_URL, {
+          method: "POST",
+          body: JSON.stringify({
+            action: "canjear",
+            id: clienteActual.id,
+            cvv: cvv,
+            puntos: puntos,
+            detalle: detalle
+          })
+        });
+
+        const result = await res.json();
+        if (result.status === "success") {
+          alert("¡Canje realizado con éxito!");
+          buscarCliente();
+        } else {
+          alert(`Error: ${result.message}`);
+        }
+      } catch (err) {
+        alert("Error al procesar el canje");
+      } finally {
+        mostrarCarga(false);
+      }
+    }
+
+    function mostrarCarga(mostrar) {
+      document.getElementById("loader").style.display = mostrar ? "block" : "none";
+    }
+  </script>
+</body>
+</html>
